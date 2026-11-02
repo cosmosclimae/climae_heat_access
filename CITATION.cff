@@ -9,6 +9,8 @@ authors:
 version: 1.0.0
 date-released: 2026-11-01
 license: MIT
+doi: 10.5281/zenodo.23898971
+repository-code: "https://github.com/cosmosclimae/climae_heat_access"
 keywords:
   - spatial accessibility
   - floating catchment area
