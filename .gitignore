@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Snakemake
+.snakemake/
+logs/
+# Data and outputs (kept in work_root, outside the repository)
+*.nc
+*.npz
+*.parquet
+*.gpkg
+*.pbf
+*.tif
+*.vrt
+*.zip
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

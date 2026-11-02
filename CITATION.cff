@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this workflow, please cite it as below."
+title: "climae_heat_access: Snakemake workflow for heat-constrained potential accessibility to outdoor sport facilities in France"
+authors:
+  - family-names: Defrance
+    given-names: Dimitri
+    orcid: "https://orcid.org/0000-0003-1371-294X"
+    affiliation: CosmosClimae
+version: 1.0.0
+date-released: 2026-11-01
+license: MIT
+keywords:
+  - spatial accessibility
+  - floating catchment area
+  - heat stress
+  - WBGT
+  - sport facilities
+  - climate adaptation

@@ -1,0 +1,27 @@
+name: climae-heat-access
+channels:
+  - conda-forge
+  - bioconda
+  - nodefaults
+dependencies:
+  - python=3.12
+  - numpy
+  - pandas
+  - scipy
+  - xarray
+  - netcdf4
+  - pyarrow
+  - pyyaml
+  - geopandas
+  - pyogrio
+  - pyproj
+  - shapely
+  - rasterio            # canopy (HRL Tree Cover Density), optional
+  - matplotlib
+  - tabulate            # tables.md (pandas.to_markdown)
+  - pandana             # pedestrian shortest paths (contraction hierarchies)
+  - pyrosm              # OSM pbf reader (walking network + buildings)
+  - osmium-tool         # département extracts from france-latest.osm.pbf
+  - snakemake-minimal>=8
+  - pytest
+  - cdsapi              # ERA5-Land download (rule era5_download); CDO installed separately

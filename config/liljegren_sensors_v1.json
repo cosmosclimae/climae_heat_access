@@ -1,0 +1,14 @@
+{
+  "model": "liljegren_energy_balance_explicit_radiation_v1",
+  "globe_diameter_m": 0.15,
+  "globe_emissivity": 0.95,
+  "globe_shortwave_albedo": 0.05,
+  "wick_diameter_m": 0.007,
+  "wick_length_m": 0.0254,
+  "wick_emissivity": 0.95,
+  "wick_shortwave_albedo": 0.4,
+  "stefan_boltzmann_w_m2_k4": 5.670374419e-8,
+  "temperature_tolerance_k": 0.00001,
+  "residual_tolerance_w_m2": 0.005,
+  "max_iterations": 100
+}

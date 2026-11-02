@@ -1,0 +1,164 @@
+# =============================================================================
+# climae_heat_access - Heat-constrained potential accessibility to outdoor sport
+# facilities in France. All paths below are placeholders: set them to your local
+# copies of the input data (see README). Any key can be overridden on the command
+# line, e.g.  snakemake -j 8 --config work_root=/data/heat_access
+# =============================================================================
+
+work_root: /path/to/work_root            # heavy outputs (outside the repository)
+
+inputs:
+  # ERA5-Land hourly files. Files matching era5land_pattern in era5land_dir are used if present;
+  # otherwise a light profile (6 variables) is downloaded into work_root/era5land/
+  # (rule era5_download; requires ~/.cdsapirc and CDO)
+  era5land_dir: /path/to/era5land                # hourly ERA5-Land, May-Sept. 1991-2025
+  era5land_pattern: era5land_full_{year}-{month}.nc
+  data_es_zip: /path/to/data_es_complet.zip      # Data ES national census of sport facilities (full export)
+  departements_geojson: /path/to/departements.geojson   # départements of metropolitan France, property "code"
+  filosofi_gpkg: /path/to/carreaux_nivNaturel_met.gpkg  # INSEE Filosofi 2021 gridded data, "niveau naturel"
+  filosofi_200m_gpkg: ""                         # strict 200-m grid if available (takes precedence when set)
+  osm_pbf: /path/to/france-latest.osm.pbf        # Geofabrik extract (the paper used the 12 Oct 2026 extract)
+  canopy_raster: /path/to/tcd_2024_fr.vrt        # HRL Tree Cover Density 10 m 2024; VRT built by scripts/tcd_download.py
+
+# Population -------------------------------------------------------------------
+population:
+  # nivnaturel_dasymetric : cells larger than 200 m are redistributed to 200-m sub-cells
+  #                         in proportion to OSM building footprint (non-residential buildings excluded)
+  # native_200m           : uses filosofi_200m_gpkg as is
+  mode: nivnaturel_dasymetric
+  groups: [ind, ind_6_10, ind_11_17, ind_18_64, ind_65p]
+  non_residential_building_tags: [industrial, commercial, retail, warehouse, office, church, chapel,
+                                  cathedral, mosque, temple, synagogue, school, university, college,
+                                  hospital, train_station, transportation, garage, garages, hangar,
+                                  barn, farm_auxiliary, shed, greenhouse, stable, cowshed, sports_hall,
+                                  stadium, public, civic, government, kindergarten, parking, roof,
+                                  service, ruins, construction, bunker, hut, cabin, toilets]
+
+# Supply (Data ES) ---------------------------------------------------------------
+facilities:
+  outdoor_families: ["Terrain de grands jeux", "Court de tennis", "Boulodrome", "Multisports/City-stades",
+                     "Terrain extérieur de petits jeux collectifs", "Equipement d'athlétisme",
+                     "Skatepark & vélo Freestyle", "Equipement d'activités de forme et de santé",
+                     "Parcours sportif/santé", "Mur et fronton", "Salle ou terrain spécialisé"]
+  outdoor_natures: ["Découvert", "Découvrable", "Extérieur couvert", "Site artificiel"]
+  indoor_natures: ["Intérieur"]
+  indoor_families: ["Salle multisports", "Salle non spécialisée", "Salle ou terrain spécialisé",
+                    "Salle de combat", "Equipement d'activités de forme et de santé", "Court de tennis",
+                    "Terrain extérieur de petits jeux collectifs", "Equipement d'athlétisme"]
+  # f = structural shade fraction: covered = 1; retractable cover ('Découvrable') = 0 (conservative)
+  covered_natures: ["Extérieur couvert"]
+  # surface classes -> (albedo, k_surface [K per W/m2]: Ts = Ta + k * GHI at mid-hour)
+  # Calibrated on field measurements in full sun, k = (Ts - Ta) / global radiation (Table S1):
+  #   synthetic: Liu & Jim 2021 SCS 75:103271 (diurnal mean, clear sky: +15.6 K / 513 W/m2 = 0.030;
+  #              albedo 29/513 = 0.057); Jim 2016 Appl. Energy 173:520 (70.2 °C, albedo 0.073);
+  #              Petrass et al. 2014 Procedia Eng. 72:943 (SBR 0.033; TPE 0.022; organic 0.026)
+  #   bitume   : Vanos et al. 2016 LUP 146:29 (asphalt 53.7-60.7 °C at 874 W/m2, albedo 0.13);
+  #              Karam et al. 2024 OASIS Paris (asphalt +22 K / 782 W/m2 = 0.028; in situ albedo 0.14)
+  #   mineral  : Vanos 2016 (concrete 49.5-56 °C, crushed granite 54 °C, k ~ 0.016-0.018);
+  #              Karam 2024 (concrete pavers +20 K / 795 = 0.025); no published measurement on clay
+  #   grass    : Liu & Jim 2021 (+3.3 K / 527 = 0.006; albedo 0.19); Karam 2024 (saturated, ~0.005);
+  #              dry grass markedly hotter (Pfautsch & Wujeska-Klause 2022: +6 K above air)
+  # Check: modelled synthetic - grass WBGT difference = +0.1 to +0.2 °C, within the range measured
+  # at 1.2-1.5 m (studies reviewed by Singh et al. 2024 IJB 68:1235: mostly -0.15 to +0.6 °C, one study +2.2 °C).
+  surface_classes:
+    reference:  [0.20, 0.000]   # ground at air temperature (reference Liljegren setup); surface not reported
+    synthetic:  [0.07, 0.030]   # k range 0.022-0.035
+    bitume:     [0.12, 0.025]   # k range 0.018-0.028; albedo 0.06 new - 0.14 aged
+    mineral:    [0.25, 0.020]   # stabilised surfaces, clay, concrete; k range 0.015-0.025
+    grass:      [0.22, 0.006]   # irrigated natural grass; k range 0.004-0.012
+  surface_map:
+    "Synthétique (hors gazon)": synthetic
+    "Gazon synthétique": synthetic
+    "Synthétique": synthetic
+    "Hybride": grass
+    "Bitume": bitume
+    "Béton": mineral
+    "Stabilisé/cendrée": mineral
+    "Stabilisé / cendré": mineral
+    "Terre battue": mineral
+    "Sable": mineral
+    "Sable et gravier": mineral
+    "Terre artificielle": mineral
+    "Carrelage, tomettes, pavés": mineral
+    "Gazon naturel": grass
+    "Surface naturelle": grass
+  canopy_buffer_m: [20, 50]          # first = main, second = sensitivity
+  capacity_mode: unit                # unit | surface (sensitivity)
+
+# Access -------------------------------------------------------------------------
+access:
+  scenarios: [public, all]           # public = free access OR declared individual use; all = all facilities
+  main: public
+
+# Network / accessibility --------------------------------------------------------
+network:
+  walk_speed_m_s: 1.25
+  max_snap_m: 400                    # cell dropped if the nearest OSM node is farther
+  prefilter_m: 2000
+  tau0_min: [15, 10, 20]             # first = main
+  w_at_tau0: 0.01                    # truncated Gaussian: beta = tau0/sqrt(ln(1/0.01))
+  departement_buffer_m: 2500
+
+# Climate ------------------------------------------------------------------------
+climate:
+  periods:
+    ref:    [1991, 2020]
+    recent: [2006, 2025]
+    urb:    [2008, 2017]             # UrbClim window (urban heat island sensitivity), uncorrected
+    urbuhi: [2008, 2017]             # same window, facility WBGT corrected with UrbClim
+  months: [5, 6, 7, 8, 9]
+  gonogo_period: ref                 # climate screen period: ref (1991-2020) or recent (2006-2025, faster)
+  local_start_hours: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]   # hourly intervals 08:00-22:00
+  timezone: Europe/Paris
+  policy: config/exposure_reference_v2.json
+  sensors: config/liljegren_sensors_v1.json
+  thresholds: [26, 28, 30]           # order irrelevant; main run uses main_threshold
+  main_threshold: 26                 # non-acclimatised general public (ACSM 2007: 25.7-27.8 = high risk; ISO 7243, unacclimatised, moderate work); 28 and 30 = sensitivity
+  graded_band: 2.0                   # graded availability: 1 below q-2; 0.5 in [q-2, q); 0 at or above q
+  peak_window: {month: 7, hours: [14, 15, 16]}   # peak window (L_peak): July, 14:00-17:00 local time
+  lighting_min_elevation_deg: 0.0    # unlit facility unavailable when the sun is below this elevation (mid-hour)
+
+# Modifier scenarios (H1) --------------------------------------------------------
+modifiers:
+  full:      {cover: true,  canopy: true,  surface: true,  lighting: true}
+  nosurf:    {cover: true,  canopy: true,  surface: false, lighting: true}
+  nolight:   {cover: true,  canopy: true,  surface: true,  lighting: false}
+  canopy50:  {cover: true,  canopy: true,  surface: true,  lighting: true, canopy_buffer: 50}
+  naive:     {cover: false, canopy: false, surface: false, lighting: false}
+  main: full
+
+# Adaptation (shading priorities) ------------------------------------------------
+adaptation:
+  period: recent                     # desert events sampled in this period
+  months: [6, 7, 8]
+  budgets_pct: [1, 5, 10]
+  equity_groups: [ind_6_10, ind_11_17, ind_65p]
+  equity_quintiles: [1, 2]
+  # out-of-sample evaluation of the shading sets: independent draws / other years
+  eval_samples:
+    seed2: {years: [2006, 2025], seed: 20261014}   # same years, independent hours
+    early: {years: [1991, 2005], seed: 20261013}   # years disjoint from the selection sample
+  eval_partial_shade: [0.5]                       # partial shading max(f, 0.5), evaluated on seed2
+
+# Urban heat island (sensitivity, UrbClim VITO 100 m daily) ----------------------
+uhi:
+  urbclim_dir: /path/to/urbclim       # one sub-folder per city (scripts/download_urbclim.py)
+  years: [2008, 2017]
+  rural_min_dist_m: 400                # rural pixel: land and > 400 m from any inhabited cell
+  elev_band_m: 50                      # rural reference taken at the facility's elevation (Copernicus DEM, dem_urbclim.py)
+  min_rural_pixels: 100                # band widened (x2) until this number of rural pixels is reached
+  peak_hours: [12, 13, 14, 15, 16, 17] # local hours that receive the daily-maximum offset (other hours: mean offset)
+
+# Analysis -----------------------------------------------------------------------
+analysis:
+  heat_scenario: nolight                   # heat-only metric: cover + canopy + surface, no lighting constraint
+  poverty_bins: [0.05, 0.10, 0.20, 0.30]   # household poverty-rate classes (men_pauv / men)
+  heavy_desert_hours: 100                  # heavy-desert threshold (h per season)
+  loss_threshold: 0.25                     # share of population with L_peak above this value
+  qpv_geojson: ""                          # QPV 2024 boundaries (ANCT, data.gouv.fr): enables cell-level QPV equity
+  desert_subsets:                          # deserts restricted to a subset of facility families (substitutability)
+    team: ["Terrain de grands jeux", "Multisports/City-stades", "Terrain extérieur de petits jeux collectifs"]
+
+# Miscellaneous ------------------------------------------------------------------
+bootstrap_n: 500
+seed: 20261013
